@@ -95,6 +95,63 @@ body {
 #bookmarks-bar > ul li a span {
   display: block;
   float: left;
+  overflow: hidden;
+  height: 18px;
+  max-width: 100px;
+}
+
+#other-bookmarks {
+  margin: 0px;
+  padding: 0px 5px;
+  background-color: #EDEDED;
+  border: 1px solid #CFCFCF;
+  border-radius: 4px;
+  position: absolute;
+  top: 35px;
+  right: 3px;
+  bottom: 45px;
+  z-index: 9999;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-size: 12px;
+}
+
+#other-bookmarks li {
+  margin: 0px;
+  padding: 0px;
+  list-style: none;
+}
+
+#other-bookmarks li a {
+  display: block;
+  height: 18px;
+  margin-top: 10px;
+  padding: 1px 6px 1px 4px;
+  border: 1px solid #F4F4F4;
+  border-radius: 4px;
+  color: inherit;
+}
+
+#other-bookmarks li a:hover {
+  border-color: #CACACA;
+  cursor: pointer;
+}
+
+#other-bookmarks li a img {
+  display: block;
+  float: left;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  margin-right: 5px;
+}
+
+#other-bookmarks li a span {
+  display: block;
+  float: left;
+  overflow: hidden;
+  height: 18px;
+  max-width: 450px;
 }
 
 #footer {
@@ -174,6 +231,7 @@ body {
   width: 128px;
   text-decoration: none;
   cursor: pointer;
+  color: inherit;
 }
 
 #apps li img {

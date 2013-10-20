@@ -1,6 +1,7 @@
 (function() {
 
   var bookmarksList = document.getElementById("bookmarks");
+  var otherBookmarksList = document.getElementById("other-bookmarks");
   var othersLink = document.getElementById("others");
   var appsWrapper = document.getElementById("apps-wrapper");
   var appsList = document.getElementById("apps");
@@ -46,12 +47,18 @@
 
   var populateBookmarksBar = function(bookmarks) {
     var i; for (i = 0; i < bookmarks.length; i++) {
-      bookmarksList.appendChild(bookmarkItem(bookmarks[i]));
+      if (bookmarks[i].url) {
+        bookmarksList.appendChild(bookmarkItem(bookmarks[i]));
+      }
     }
   };
 
   var populateOtherBookmarks = function(bookmarks) {
-
+    var i; for (i = 0; i < bookmarks.length; i++) {
+      if (bookmarks[i].url) {
+        otherBookmarksList.appendChild(bookmarkItem(bookmarks[i]));
+      }
+    }
   };
 
   var appItem = function(app) {
@@ -89,6 +96,12 @@
   chrome.bookmarks.getChildren("1", function(bookmarks) {
     populateBookmarksBar(bookmarks);
   });
+
+  othersLink.addEventListener('click', function() {
+    chrome.bookmarks.getChildren("2", function(bookmarks) {
+      populateOtherBookmarks(bookmarks);
+    });
+  }, false);
 
   chrome.management.getAll(function(extensions) {
     var apps = [];
