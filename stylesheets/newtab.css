@@ -75,10 +75,16 @@ body {
   max-width: 100px;
 }
 
+#bookmarks-bar .bookmarks-list {
+  padding-left: 5px;
+  padding-right: 0px;
+}
+
 #bookmarks-bar .bookmarks-list.other-bookmarks {
   position: absolute;
   top: 0px;
   right: 0px;
+  padding-left: 0px;
   padding-right: 10px;
   background-color: #F4F4F4;
 }
