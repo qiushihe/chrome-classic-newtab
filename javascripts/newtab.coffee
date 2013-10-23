@@ -31,16 +31,33 @@ class ChromeClassicNewTab
       @$viewport.appendChild(@$el)
 
       @bookmarksLoaded.then =>
-        bookmarksList = new BookmarksList(@bookmarks)
-        bookmarksList.render(@$el)
+        @mainBookmarksList = new BookmarksList(@bookmarks, { delegate: this })
+        @mainBookmarksList.render(@$el)
 
-        otherBookmarksList = new BookmarksList([{ id: "2", title: "Other Bookmarks" }])
-        otherBookmarksList.render(@$el)
-        otherBookmarksList.$el.className += " other-bookmarks"
+        @otherBookmarksList = new BookmarksList([{ id: "2", title: "Other Bookmarks" }], { delegate: this })
+        @otherBookmarksList.render(@$el)
+        @otherBookmarksList.$el.className += " other-bookmarks"
+
+    BookmarksListDidOpenFolder: (bookmarksList) ->
+      if bookmarksList == @mainBookmarksList
+        @otherBookmarksList.hidePopupIfPresent()
+      else
+        @mainBookmarksList.hidePopupIfPresent()
+
+    BookmarksListDidMouseOverItem: (bookmarksList, bookmarkItem) ->
+      if bookmarkItem.isFolder()
+        if bookmarksList == @mainBookmarksList
+          @otherBookmarksList.hidePopupIfPresent()
+        else
+          @mainBookmarksList.hidePopupIfPresent()
+      else
+        @otherBookmarksList.hidePopupIfPresent()
+        @mainBookmarksList.hidePopupIfPresent()
 
   class BookmarksList
 
-    constructor: ((@bookmarks) ->)
+    constructor: (@bookmarks, @options = {}) ->
+      @delegate = @options.delegate
 
     render: (@$viewport) ->
       @$el = document.createElement("ul")
@@ -53,21 +70,33 @@ class ChromeClassicNewTab
 
       @$viewport.appendChild(@$el)
 
-    BookmarkItemDidClickFolder: (bookmarkItem) ->
-      chrome.bookmarks.getChildren bookmarkItem.bookmark.id, (bookmarks) =>
-        if @popup
-          @popup.hide()
-          @popup = null
+    hidePopupIfPresent: ->
+      if @popup
+        @popup.hide()
+        @popup = null
 
-        @popup = new BookmarksPopup(bookmarks, {
-          parentPopup: null
-        })
+    openFolder: (bookmarkItem) ->
+      chrome.bookmarks.getChildren bookmarkItem.bookmarkId, (bookmarks) =>
+        @hidePopupIfPresent()
+        @popup = new BookmarksPopup(bookmarks, { folderId: bookmarkItem.bookmarkId })
         @popup.render(bookmarkItem.$link)
+      @delegate?.BookmarksListDidOpenFolder?(this)
+
+    BookmarkItemDidClick: (bookmarkItem) ->
+      @openFolder(bookmarkItem) if bookmarkItem.isFolder()
+
+    BookmarkItemDidMouseOver: (bookmarkItem) ->
+      @hidePopupIfPresent() unless bookmarkItem.isFolder()
+      @delegate?.BookmarksListDidMouseOverItem?(this, bookmarkItem)
+
+    BookmarkItemWillClick: (bookmarkItem) ->
+      @hidePopupIfPresent()
 
   class BookmarksPopup
 
     constructor: (@bookmarks, @options = {}, @flowtipOptions = {}) ->
       @parentPopup = @options.parentPopup
+      @folderId = @options.folderId
 
     render: (@$target) ->
       @$el = document.createElement("ul")
@@ -119,29 +148,43 @@ class ChromeClassicNewTab
       @flowtip.show()
 
     hide: ->
+      @hidePopupIfPresent()
+      @flowtip.hide()
+      @flowtip.destroy()
+
+    hidePopupIfPresent: ->
       if @popup
         @popup.hide()
         @popup = null
-      @flowtip.hide()
-      @flowtip.destroy()
+
+    openFolder: (bookmarkItem) ->
+      chrome.bookmarks.getChildren bookmarkItem.bookmarkId, (bookmarks) =>
+        @hidePopupIfPresent()
+        @popup = new BookmarksPopup(bookmarks, {
+          parentPopup: this
+          folderId: bookmarkItem.bookmarkId
+        })
+        @popup.render(bookmarkItem.$link)
 
     maxHeight: ->
       300
 
-    BookmarkItemDidClickFolder: (bookmarkItem) ->
-      chrome.bookmarks.getChildren bookmarkItem.bookmark.id, (bookmarks) =>
+    BookmarkItemDidMouseOver: (bookmarkItem) ->
+      if bookmarkItem.isFolder()
         if @popup
-          @popup.hide()
-          @popup = null
+          @hidePopupIfPresent() if @popup.folderId != bookmarkItem.bookmarkId
+        else
+          @openFolder(bookmarkItem)
+      else
+        @hidePopupIfPresent()
 
-        @popup = new BookmarksPopup(bookmarks, {
-          parentPopup: this
-        })
-        @popup.render(bookmarkItem.$link)
+    BookmarkItemWillClick: (bookmarkItem) ->
+      @hidePopupIfPresent()
 
   class BookmarkItem
 
-    constructor: ((@bookmark) ->)
+    constructor: (@bookmark) ->
+      @bookmarkId = @bookmark.id
 
     render: (@$viewport) ->
       @$el = document.createElement("li")
@@ -155,12 +198,23 @@ class ChromeClassicNewTab
       $label = document.createElement("span")
 
       $link.className = "clearfix"
-      if @bookmark.url
-        $link.setAttribute("href", @bookmark.url)
-      else
-        $link.addEventListener "click", =>
-          @delegate?.BookmarkItemDidClickFolder?(this)
-        , false
+      $link.setAttribute("href", @bookmark.url) unless @isFolder()
+
+      $link.addEventListener "mouseover", =>
+        @delegate?.BookmarkItemDidMouseOver?(this)
+      , false
+
+      $link.addEventListener "mouseout", =>
+        @delegate?.BookmarkItemDidMouseOut?(this)
+      , false
+
+      $link.addEventListener "mousedown", =>
+        @delegate?.BookmarkItemWillClick?(this)
+      , false
+
+      $link.addEventListener "click", =>
+        @delegate?.BookmarkItemDidClick?(this)
+      , false
 
       $icon.setAttribute("src", @faviconURL())
       $icon.setAttribute("width", "16")
@@ -175,6 +229,9 @@ class ChromeClassicNewTab
       @$link = $link
 
       @$viewport.appendChild(@$el)
+
+    isFolder: ->
+      !@bookmark.url
 
     faviconURL: ->
       if @bookmark.url

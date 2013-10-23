@@ -3,7 +3,7 @@
   var ChromeClassicNewTab;
 
   ChromeClassicNewTab = (function() {
-    var AppItem, AppsList, BookmarkItem, BookmarksBar, BookmarksList, BookmarksPopup, Footer, _class, _class1, _class2, _ref, _ref1, _ref2;
+    var AppItem, AppsList, BookmarkItem, BookmarksBar, BookmarksList, BookmarksPopup, Footer, _class, _ref;
 
     function ChromeClassicNewTab($viewport) {
       this.$viewport = $viewport;
@@ -33,18 +33,42 @@
         this.$el.id = "bookmarks-bar";
         this.$viewport.appendChild(this.$el);
         return this.bookmarksLoaded.then(function() {
-          var bookmarksList, otherBookmarksList;
-          bookmarksList = new BookmarksList(_this.bookmarks);
-          bookmarksList.render(_this.$el);
-          otherBookmarksList = new BookmarksList([
+          _this.mainBookmarksList = new BookmarksList(_this.bookmarks, {
+            delegate: _this
+          });
+          _this.mainBookmarksList.render(_this.$el);
+          _this.otherBookmarksList = new BookmarksList([
             {
               id: "2",
               title: "Other Bookmarks"
             }
-          ]);
-          otherBookmarksList.render(_this.$el);
-          return otherBookmarksList.$el.className += " other-bookmarks";
+          ], {
+            delegate: _this
+          });
+          _this.otherBookmarksList.render(_this.$el);
+          return _this.otherBookmarksList.$el.className += " other-bookmarks";
         });
+      };
+
+      BookmarksBar.prototype.BookmarksListDidOpenFolder = function(bookmarksList) {
+        if (bookmarksList === this.mainBookmarksList) {
+          return this.otherBookmarksList.hidePopupIfPresent();
+        } else {
+          return this.mainBookmarksList.hidePopupIfPresent();
+        }
+      };
+
+      BookmarksBar.prototype.BookmarksListDidMouseOverItem = function(bookmarksList, bookmarkItem) {
+        if (bookmarkItem.isFolder()) {
+          if (bookmarksList === this.mainBookmarksList) {
+            return this.otherBookmarksList.hidePopupIfPresent();
+          } else {
+            return this.mainBookmarksList.hidePopupIfPresent();
+          }
+        } else {
+          this.otherBookmarksList.hidePopupIfPresent();
+          return this.mainBookmarksList.hidePopupIfPresent();
+        }
       };
 
       return BookmarksBar;
@@ -52,23 +76,20 @@
     })();
 
     BookmarksList = (function() {
-      function BookmarksList() {
-        _ref = _class.apply(this, arguments);
-        return _ref;
+      function BookmarksList(bookmarks, options) {
+        this.bookmarks = bookmarks;
+        this.options = options != null ? options : {};
+        this.delegate = this.options.delegate;
       }
 
-      _class = (function(bookmarks) {
-        this.bookmarks = bookmarks;
-      });
-
       BookmarksList.prototype.render = function($viewport) {
-        var bookmark, bookmarkItem, _i, _len, _ref1;
+        var bookmark, bookmarkItem, _i, _len, _ref;
         this.$viewport = $viewport;
         this.$el = document.createElement("ul");
         this.$el.className = "bookmarks-list clearfix";
-        _ref1 = this.bookmarks;
-        for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
-          bookmark = _ref1[_i];
+        _ref = this.bookmarks;
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          bookmark = _ref[_i];
           bookmarkItem = new BookmarkItem(bookmark);
           bookmarkItem.delegate = this;
           bookmarkItem.render(this.$el);
@@ -76,18 +97,42 @@
         return this.$viewport.appendChild(this.$el);
       };
 
-      BookmarksList.prototype.BookmarkItemDidClickFolder = function(bookmarkItem) {
-        var _this = this;
-        return chrome.bookmarks.getChildren(bookmarkItem.bookmark.id, function(bookmarks) {
-          if (_this.popup) {
-            _this.popup.hide();
-            _this.popup = null;
-          }
+      BookmarksList.prototype.hidePopupIfPresent = function() {
+        if (this.popup) {
+          this.popup.hide();
+          return this.popup = null;
+        }
+      };
+
+      BookmarksList.prototype.openFolder = function(bookmarkItem) {
+        var _ref,
+          _this = this;
+        chrome.bookmarks.getChildren(bookmarkItem.bookmarkId, function(bookmarks) {
+          _this.hidePopupIfPresent();
           _this.popup = new BookmarksPopup(bookmarks, {
-            parentPopup: null
+            folderId: bookmarkItem.bookmarkId
           });
           return _this.popup.render(bookmarkItem.$link);
         });
+        return (_ref = this.delegate) != null ? typeof _ref.BookmarksListDidOpenFolder === "function" ? _ref.BookmarksListDidOpenFolder(this) : void 0 : void 0;
+      };
+
+      BookmarksList.prototype.BookmarkItemDidClick = function(bookmarkItem) {
+        if (bookmarkItem.isFolder()) {
+          return this.openFolder(bookmarkItem);
+        }
+      };
+
+      BookmarksList.prototype.BookmarkItemDidMouseOver = function(bookmarkItem) {
+        var _ref;
+        if (!bookmarkItem.isFolder()) {
+          this.hidePopupIfPresent();
+        }
+        return (_ref = this.delegate) != null ? typeof _ref.BookmarksListDidMouseOverItem === "function" ? _ref.BookmarksListDidMouseOverItem(this, bookmarkItem) : void 0 : void 0;
+      };
+
+      BookmarksList.prototype.BookmarkItemWillClick = function(bookmarkItem) {
+        return this.hidePopupIfPresent();
       };
 
       return BookmarksList;
@@ -100,16 +145,17 @@
         this.options = options != null ? options : {};
         this.flowtipOptions = flowtipOptions != null ? flowtipOptions : {};
         this.parentPopup = this.options.parentPopup;
+        this.folderId = this.options.folderId;
       }
 
       BookmarksPopup.prototype.render = function($target) {
-        var bookmark, bookmarkItem, flowtipOptions, _i, _len, _ref1;
+        var bookmark, bookmarkItem, flowtipOptions, _i, _len, _ref;
         this.$target = $target;
         this.$el = document.createElement("ul");
         this.$el.className = "bookmarks-list";
-        _ref1 = this.bookmarks;
-        for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
-          bookmark = _ref1[_i];
+        _ref = this.bookmarks;
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          bookmark = _ref[_i];
           bookmarkItem = new BookmarkItem(bookmark);
           bookmarkItem.delegate = this;
           bookmarkItem.render(this.$el);
@@ -151,30 +197,50 @@
       };
 
       BookmarksPopup.prototype.hide = function() {
-        if (this.popup) {
-          this.popup.hide();
-          this.popup = null;
-        }
+        this.hidePopupIfPresent();
         this.flowtip.hide();
         return this.flowtip.destroy();
+      };
+
+      BookmarksPopup.prototype.hidePopupIfPresent = function() {
+        if (this.popup) {
+          this.popup.hide();
+          return this.popup = null;
+        }
+      };
+
+      BookmarksPopup.prototype.openFolder = function(bookmarkItem) {
+        var _this = this;
+        return chrome.bookmarks.getChildren(bookmarkItem.bookmarkId, function(bookmarks) {
+          _this.hidePopupIfPresent();
+          _this.popup = new BookmarksPopup(bookmarks, {
+            parentPopup: _this,
+            folderId: bookmarkItem.bookmarkId
+          });
+          return _this.popup.render(bookmarkItem.$link);
+        });
       };
 
       BookmarksPopup.prototype.maxHeight = function() {
         return 300;
       };
 
-      BookmarksPopup.prototype.BookmarkItemDidClickFolder = function(bookmarkItem) {
-        var _this = this;
-        return chrome.bookmarks.getChildren(bookmarkItem.bookmark.id, function(bookmarks) {
-          if (_this.popup) {
-            _this.popup.hide();
-            _this.popup = null;
+      BookmarksPopup.prototype.BookmarkItemDidMouseOver = function(bookmarkItem) {
+        if (bookmarkItem.isFolder()) {
+          if (this.popup) {
+            if (this.popup.folderId !== bookmarkItem.bookmarkId) {
+              return this.hidePopupIfPresent();
+            }
+          } else {
+            return this.openFolder(bookmarkItem);
           }
-          _this.popup = new BookmarksPopup(bookmarks, {
-            parentPopup: _this
-          });
-          return _this.popup.render(bookmarkItem.$link);
-        });
+        } else {
+          return this.hidePopupIfPresent();
+        }
+      };
+
+      BookmarksPopup.prototype.BookmarkItemWillClick = function(bookmarkItem) {
+        return this.hidePopupIfPresent();
       };
 
       return BookmarksPopup;
@@ -182,14 +248,10 @@
     })();
 
     BookmarkItem = (function() {
-      function BookmarkItem() {
-        _ref1 = _class1.apply(this, arguments);
-        return _ref1;
-      }
-
-      _class1 = (function(bookmark) {
+      function BookmarkItem(bookmark) {
         this.bookmark = bookmark;
-      });
+        this.bookmarkId = this.bookmark.id;
+      }
 
       BookmarkItem.prototype.render = function($viewport) {
         var $icon, $label, $link,
@@ -204,14 +266,25 @@
         $icon = document.createElement("img");
         $label = document.createElement("span");
         $link.className = "clearfix";
-        if (this.bookmark.url) {
+        if (!this.isFolder()) {
           $link.setAttribute("href", this.bookmark.url);
-        } else {
-          $link.addEventListener("click", function() {
-            var _ref2;
-            return (_ref2 = _this.delegate) != null ? typeof _ref2.BookmarkItemDidClickFolder === "function" ? _ref2.BookmarkItemDidClickFolder(_this) : void 0 : void 0;
-          }, false);
         }
+        $link.addEventListener("mouseover", function() {
+          var _ref;
+          return (_ref = _this.delegate) != null ? typeof _ref.BookmarkItemDidMouseOver === "function" ? _ref.BookmarkItemDidMouseOver(_this) : void 0 : void 0;
+        }, false);
+        $link.addEventListener("mouseout", function() {
+          var _ref;
+          return (_ref = _this.delegate) != null ? typeof _ref.BookmarkItemDidMouseOut === "function" ? _ref.BookmarkItemDidMouseOut(_this) : void 0 : void 0;
+        }, false);
+        $link.addEventListener("mousedown", function() {
+          var _ref;
+          return (_ref = _this.delegate) != null ? typeof _ref.BookmarkItemWillClick === "function" ? _ref.BookmarkItemWillClick(_this) : void 0 : void 0;
+        }, false);
+        $link.addEventListener("click", function() {
+          var _ref;
+          return (_ref = _this.delegate) != null ? typeof _ref.BookmarkItemDidClick === "function" ? _ref.BookmarkItemDidClick(_this) : void 0 : void 0;
+        }, false);
         $icon.setAttribute("src", this.faviconURL());
         $icon.setAttribute("width", "16");
         $icon.setAttribute("height", "16");
@@ -221,6 +294,10 @@
         this.$el.appendChild($link);
         this.$link = $link;
         return this.$viewport.appendChild(this.$el);
+      };
+
+      BookmarkItem.prototype.isFolder = function() {
+        return !this.bookmark.url;
       };
 
       BookmarkItem.prototype.faviconURL = function() {
@@ -277,7 +354,7 @@
       };
 
       AppsList.prototype.renderApps = function() {
-        var app, appItem, _i, _len, _ref2, _results;
+        var app, appItem, _i, _len, _ref, _results;
         this.apps.unshift({
           name: "Store",
           url: "https://chrome.google.com/webstore",
@@ -288,10 +365,10 @@
             }
           ]
         });
-        _ref2 = this.apps;
+        _ref = this.apps;
         _results = [];
-        for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
-          app = _ref2[_i];
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          app = _ref[_i];
           appItem = new AppItem(app);
           _results.push(appItem.render(this.list));
         }
@@ -308,11 +385,11 @@
 
     AppItem = (function() {
       function AppItem() {
-        _ref2 = _class2.apply(this, arguments);
-        return _ref2;
+        _ref = _class.apply(this, arguments);
+        return _ref;
       }
 
-      _class2 = (function(app) {
+      _class = (function(app) {
         this.app = app;
       });
 
@@ -346,12 +423,12 @@
       };
 
       AppItem.prototype.iconURL = function() {
-        var icon, largestURL, size, _i, _len, _ref3;
+        var icon, largestURL, size, _i, _len, _ref1;
         size = 0;
         largestURL = null;
-        _ref3 = this.app.icons;
-        for (_i = 0, _len = _ref3.length; _i < _len; _i++) {
-          icon = _ref3[_i];
+        _ref1 = this.app.icons;
+        for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+          icon = _ref1[_i];
           if (icon.size > size) {
             size = icon.size;
             largestURL = icon.url;
