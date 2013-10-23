@@ -55,12 +55,19 @@ class ChromeClassicNewTab
 
     BookmarkItemDidClickFolder: (bookmarkItem) ->
       chrome.bookmarks.getChildren bookmarkItem.bookmark.id, (bookmarks) =>
-        popup = new BookmarksPopup(bookmarks, { region: "bottom" })
-        popup.render(bookmarkItem.$el)
+        if @popup
+          @popup.hide()
+          @popup = null
+
+        @popup = new BookmarksPopup(bookmarks, {
+          parentPopup: null
+        })
+        @popup.render(bookmarkItem.$link)
 
   class BookmarksPopup
 
-    constructor: ((@bookmarks, @options = {}) ->)
+    constructor: (@bookmarks, @options = {}, @flowtipOptions = {}) ->
+      @parentPopup = @options.parentPopup
 
     render: (@$target) ->
       @$el = document.createElement("ul")
@@ -71,13 +78,66 @@ class ChromeClassicNewTab
         bookmarkItem.delegate = this
         bookmarkItem.render(@$el)
 
-      @flowtip = new FlowTip(_.extend(@options, {
+      flowtipOptions = if @parentPopup
+        {
+          region: "right"
+          topDisabled: true
+          leftDisabled: false
+          rightDisabled: false
+          bottomDisabled: true
+          rootAlign: "edge"
+          leftRootAlignOffset: 0
+          rightRootAlignOffset: -0.1
+          targetAlign: "edge"
+          leftTargetAlignOffset: 0
+          rightTargetAlignOffset: -0.1
+        }
+      else
+        {
+          region: "bottom"
+          topDisabled: true
+          leftDisabled: true
+          rightDisabled: true
+          bottomDisabled: false
+          rootAlign: "edge"
+          rootAlignOffset: 0
+          targetAlign: "edge"
+          targetAlignOffset: 0
+        }
+
+      @flowtip = new FlowTip(_.extend({
+        className: "bookmarks-popup"
         hasTail: false
-      }))
+        rotationOffset: 0
+        edgeOffset: 10
+        targetOffset: 2
+        maxHeight: "#{@maxHeight()}px"
+      }, flowtipOptions, @flowtipOptions))
 
       @flowtip.setTooltipContent(@$el)
       @flowtip.setTarget(@$target)
       @flowtip.show()
+
+    hide: ->
+      if @popup
+        @popup.hide()
+        @popup = null
+      @flowtip.hide()
+      @flowtip.destroy()
+
+    maxHeight: ->
+      300
+
+    BookmarkItemDidClickFolder: (bookmarkItem) ->
+      chrome.bookmarks.getChildren bookmarkItem.bookmark.id, (bookmarks) =>
+        if @popup
+          @popup.hide()
+          @popup = null
+
+        @popup = new BookmarksPopup(bookmarks, {
+          parentPopup: this
+        })
+        @popup.render(bookmarkItem.$link)
 
   class BookmarkItem
 
@@ -111,6 +171,8 @@ class ChromeClassicNewTab
       $link.appendChild($icon)
       $link.appendChild($label)
       @$el.appendChild($link)
+
+      @$link = $link
 
       @$viewport.appendChild(@$el)
 

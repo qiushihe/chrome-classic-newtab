@@ -3,7 +3,7 @@
   var ChromeClassicNewTab;
 
   ChromeClassicNewTab = (function() {
-    var AppItem, AppsList, BookmarkItem, BookmarksBar, BookmarksList, BookmarksPopup, Footer, _class, _class1, _class2, _class3, _ref, _ref1, _ref2, _ref3;
+    var AppItem, AppsList, BookmarkItem, BookmarksBar, BookmarksList, BookmarksPopup, Footer, _class, _class1, _class2, _ref, _ref1, _ref2;
 
     function ChromeClassicNewTab($viewport) {
       this.$viewport = $viewport;
@@ -79,11 +79,14 @@
       BookmarksList.prototype.BookmarkItemDidClickFolder = function(bookmarkItem) {
         var _this = this;
         return chrome.bookmarks.getChildren(bookmarkItem.bookmark.id, function(bookmarks) {
-          var popup;
-          popup = new BookmarksPopup(bookmarks, {
-            region: "bottom"
+          if (_this.popup) {
+            _this.popup.hide();
+            _this.popup = null;
+          }
+          _this.popup = new BookmarksPopup(bookmarks, {
+            parentPopup: null
           });
-          return popup.render(bookmarkItem.$el);
+          return _this.popup.render(bookmarkItem.$link);
         });
       };
 
@@ -92,34 +95,86 @@
     })();
 
     BookmarksPopup = (function() {
-      function BookmarksPopup() {
-        _ref1 = _class1.apply(this, arguments);
-        return _ref1;
-      }
-
-      _class1 = (function(bookmarks, options) {
+      function BookmarksPopup(bookmarks, options, flowtipOptions) {
         this.bookmarks = bookmarks;
         this.options = options != null ? options : {};
-      });
+        this.flowtipOptions = flowtipOptions != null ? flowtipOptions : {};
+        this.parentPopup = this.options.parentPopup;
+      }
 
       BookmarksPopup.prototype.render = function($target) {
-        var bookmark, bookmarkItem, _i, _len, _ref2;
+        var bookmark, bookmarkItem, flowtipOptions, _i, _len, _ref1;
         this.$target = $target;
         this.$el = document.createElement("ul");
         this.$el.className = "bookmarks-list";
-        _ref2 = this.bookmarks;
-        for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
-          bookmark = _ref2[_i];
+        _ref1 = this.bookmarks;
+        for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+          bookmark = _ref1[_i];
           bookmarkItem = new BookmarkItem(bookmark);
           bookmarkItem.delegate = this;
           bookmarkItem.render(this.$el);
         }
-        this.flowtip = new FlowTip(_.extend(this.options, {
-          hasTail: false
-        }));
+        flowtipOptions = this.parentPopup ? {
+          region: "right",
+          topDisabled: true,
+          leftDisabled: false,
+          rightDisabled: false,
+          bottomDisabled: true,
+          rootAlign: "edge",
+          leftRootAlignOffset: 0,
+          rightRootAlignOffset: -0.1,
+          targetAlign: "edge",
+          leftTargetAlignOffset: 0,
+          rightTargetAlignOffset: -0.1
+        } : {
+          region: "bottom",
+          topDisabled: true,
+          leftDisabled: true,
+          rightDisabled: true,
+          bottomDisabled: false,
+          rootAlign: "edge",
+          rootAlignOffset: 0,
+          targetAlign: "edge",
+          targetAlignOffset: 0
+        };
+        this.flowtip = new FlowTip(_.extend({
+          className: "bookmarks-popup",
+          hasTail: false,
+          rotationOffset: 0,
+          edgeOffset: 10,
+          targetOffset: 2,
+          maxHeight: "" + (this.maxHeight()) + "px"
+        }, flowtipOptions, this.flowtipOptions));
         this.flowtip.setTooltipContent(this.$el);
         this.flowtip.setTarget(this.$target);
         return this.flowtip.show();
+      };
+
+      BookmarksPopup.prototype.hide = function() {
+        if (this.popup) {
+          this.popup.hide();
+          this.popup = null;
+        }
+        this.flowtip.hide();
+        return this.flowtip.destroy();
+      };
+
+      BookmarksPopup.prototype.maxHeight = function() {
+        return 300;
+      };
+
+      BookmarksPopup.prototype.BookmarkItemDidClickFolder = function(bookmarkItem) {
+        var _this = this;
+        return chrome.bookmarks.getChildren(bookmarkItem.bookmark.id, function(bookmarks) {
+          if (_this.popup) {
+            _this.popup.hide();
+            _this.popup = null;
+          }
+          _this.popup = new BookmarksPopup(bookmarks, {
+            parentPopup: _this
+          });
+          return _this.popup.render(bookmarkItem.$link);
+        });
       };
 
       return BookmarksPopup;
@@ -128,11 +183,11 @@
 
     BookmarkItem = (function() {
       function BookmarkItem() {
-        _ref2 = _class2.apply(this, arguments);
-        return _ref2;
+        _ref1 = _class1.apply(this, arguments);
+        return _ref1;
       }
 
-      _class2 = (function(bookmark) {
+      _class1 = (function(bookmark) {
         this.bookmark = bookmark;
       });
 
@@ -153,8 +208,8 @@
           $link.setAttribute("href", this.bookmark.url);
         } else {
           $link.addEventListener("click", function() {
-            var _ref3;
-            return (_ref3 = _this.delegate) != null ? typeof _ref3.BookmarkItemDidClickFolder === "function" ? _ref3.BookmarkItemDidClickFolder(_this) : void 0 : void 0;
+            var _ref2;
+            return (_ref2 = _this.delegate) != null ? typeof _ref2.BookmarkItemDidClickFolder === "function" ? _ref2.BookmarkItemDidClickFolder(_this) : void 0 : void 0;
           }, false);
         }
         $icon.setAttribute("src", this.faviconURL());
@@ -164,6 +219,7 @@
         $link.appendChild($icon);
         $link.appendChild($label);
         this.$el.appendChild($link);
+        this.$link = $link;
         return this.$viewport.appendChild(this.$el);
       };
 
@@ -221,7 +277,7 @@
       };
 
       AppsList.prototype.renderApps = function() {
-        var app, appItem, _i, _len, _ref3, _results;
+        var app, appItem, _i, _len, _ref2, _results;
         this.apps.unshift({
           name: "Store",
           url: "https://chrome.google.com/webstore",
@@ -232,10 +288,10 @@
             }
           ]
         });
-        _ref3 = this.apps;
+        _ref2 = this.apps;
         _results = [];
-        for (_i = 0, _len = _ref3.length; _i < _len; _i++) {
-          app = _ref3[_i];
+        for (_i = 0, _len = _ref2.length; _i < _len; _i++) {
+          app = _ref2[_i];
           appItem = new AppItem(app);
           _results.push(appItem.render(this.list));
         }
@@ -252,11 +308,11 @@
 
     AppItem = (function() {
       function AppItem() {
-        _ref3 = _class3.apply(this, arguments);
-        return _ref3;
+        _ref2 = _class2.apply(this, arguments);
+        return _ref2;
       }
 
-      _class3 = (function(app) {
+      _class2 = (function(app) {
         this.app = app;
       });
 
@@ -290,12 +346,12 @@
       };
 
       AppItem.prototype.iconURL = function() {
-        var icon, largestURL, size, _i, _len, _ref4;
+        var icon, largestURL, size, _i, _len, _ref3;
         size = 0;
         largestURL = null;
-        _ref4 = this.app.icons;
-        for (_i = 0, _len = _ref4.length; _i < _len; _i++) {
-          icon = _ref4[_i];
+        _ref3 = this.app.icons;
+        for (_i = 0, _len = _ref3.length; _i < _len; _i++) {
+          icon = _ref3[_i];
           if (icon.size > size) {
             size = icon.size;
             largestURL = icon.url;
