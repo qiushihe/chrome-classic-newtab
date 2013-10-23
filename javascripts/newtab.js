@@ -236,7 +236,11 @@
       };
 
       BookmarksPopup.prototype.maxHeight = function() {
-        return 300;
+        if (this.parentPopup) {
+          return document.body.clientHeight - 20;
+        } else {
+          return document.body.clientHeight - 41;
+        }
       };
 
       BookmarksPopup.prototype.BookmarkItemDidMouseOver = function(bookmarkItem) {

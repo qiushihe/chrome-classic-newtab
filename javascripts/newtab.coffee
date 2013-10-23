@@ -179,7 +179,10 @@ class ChromeClassicNewTab
         @popup.render(bookmarkItem.$link)
 
     maxHeight: ->
-      300
+      if @parentPopup
+        document.body.clientHeight - 20 # edgeOffset x 2
+      else
+        document.body.clientHeight - 41 # bookmarks-bar height + 1px border
 
     BookmarkItemDidMouseOver: (bookmarkItem) ->
       if bookmarkItem.isFolder()
