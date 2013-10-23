@@ -12,6 +12,11 @@ class ChromeClassicNewTab
     @footer = new Footer()
     @footer.render(@$viewport)
 
+    document.body.addEventListener "click", (event) =>
+      unless $(event.target).closest(".bookmarks-popup").length
+        @bookmarksBar.hidePopupIfPresent()
+    , false
+
   #
   # Private
   #
@@ -38,6 +43,10 @@ class ChromeClassicNewTab
         @otherBookmarksList.render(@$el)
         @otherBookmarksList.$el.className += " other-bookmarks"
 
+    hidePopupIfPresent: ->
+      @otherBookmarksList.hidePopupIfPresent()
+      @mainBookmarksList.hidePopupIfPresent()
+
     BookmarksListDidOpenFolder: (bookmarksList) ->
       if bookmarksList == @mainBookmarksList
         @otherBookmarksList.hidePopupIfPresent()
@@ -51,8 +60,7 @@ class ChromeClassicNewTab
         else
           @mainBookmarksList.hidePopupIfPresent()
       else
-        @otherBookmarksList.hidePopupIfPresent()
-        @mainBookmarksList.hidePopupIfPresent()
+        @hidePopupIfPresent()
 
   class BookmarksList
 
@@ -147,6 +155,10 @@ class ChromeClassicNewTab
       @flowtip.setTarget(@$target)
       @flowtip.show()
 
+      @flowtip.content.addEventListener "scroll", =>
+        @hidePopupIfPresent()
+      , false
+
     hide: ->
       @hidePopupIfPresent()
       @flowtip.hide()
@@ -178,8 +190,33 @@ class ChromeClassicNewTab
       else
         @hidePopupIfPresent()
 
+      @parentPopup?.BookmarksPopupDidMouseOverItem?(bookmarkItem)
+
+    BookmarkItemDidMouseOut: (bookmarkItem) ->
+      if bookmarkItem.isFolder()
+        unless @mouseoutTimeout
+          @mouseoutTimeout = _.delay =>
+            @hidePopupIfPresent()
+            @mouseoutTimeout = null
+          , 100
+
     BookmarkItemWillClick: (bookmarkItem) ->
-      @hidePopupIfPresent()
+      if @popup && @popup.folderId != bookmarkItem.bookmarkId
+        @hidePopupIfPresent()
+
+    BookmarkItemDidClick: (bookmarkItem) ->
+      @parentPopup?.BookmarksPopupDidClickItem?(bookmarkItem)
+
+    BookmarksPopupDidMouseOverItem: (bookmarkItem) ->
+      if @mouseoutTimeout
+        clearTimeout(@mouseoutTimeout)
+        @mouseoutTimeout = null
+
+    BookmarksPopupDidClickItem: (bookmarkItem) ->
+      if @parentPopup
+        @hidePopupIfPresent()
+      else
+        @hide()
 
   class BookmarkItem
 
@@ -201,11 +238,21 @@ class ChromeClassicNewTab
       $link.setAttribute("href", @bookmark.url) unless @isFolder()
 
       $link.addEventListener "mouseover", =>
-        @delegate?.BookmarkItemDidMouseOver?(this)
+        if @mouseoutTimeout
+          clearTimeout(@mouseoutTimeout)
+          @mouseoutTimeout = null
+        else
+          _.delay =>
+            @delegate?.BookmarkItemDidMouseOver?(this)
+          , 110
       , false
 
       $link.addEventListener "mouseout", =>
-        @delegate?.BookmarkItemDidMouseOut?(this)
+        unless @mouseoutTimeout
+          @mouseoutTimeout = _.delay =>
+            @delegate?.BookmarkItemDidMouseOut?(this)
+            @mouseoutTimeout = null
+          , 100
       , false
 
       $link.addEventListener "mousedown", =>

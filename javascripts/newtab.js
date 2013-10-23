@@ -6,6 +6,7 @@
     var AppItem, AppsList, BookmarkItem, BookmarksBar, BookmarksList, BookmarksPopup, Footer, _class, _ref;
 
     function ChromeClassicNewTab($viewport) {
+      var _this = this;
       this.$viewport = $viewport;
       this.bookmarksBar = new BookmarksBar();
       this.bookmarksBar.render(this.$viewport);
@@ -13,6 +14,11 @@
       this.appsList.render(this.$viewport);
       this.footer = new Footer();
       this.footer.render(this.$viewport);
+      document.body.addEventListener("click", function(event) {
+        if (!$(event.target).closest(".bookmarks-popup").length) {
+          return _this.bookmarksBar.hidePopupIfPresent();
+        }
+      }, false);
     }
 
     BookmarksBar = (function() {
@@ -50,6 +56,11 @@
         });
       };
 
+      BookmarksBar.prototype.hidePopupIfPresent = function() {
+        this.otherBookmarksList.hidePopupIfPresent();
+        return this.mainBookmarksList.hidePopupIfPresent();
+      };
+
       BookmarksBar.prototype.BookmarksListDidOpenFolder = function(bookmarksList) {
         if (bookmarksList === this.mainBookmarksList) {
           return this.otherBookmarksList.hidePopupIfPresent();
@@ -66,8 +77,7 @@
             return this.mainBookmarksList.hidePopupIfPresent();
           }
         } else {
-          this.otherBookmarksList.hidePopupIfPresent();
-          return this.mainBookmarksList.hidePopupIfPresent();
+          return this.hidePopupIfPresent();
         }
       };
 
@@ -149,7 +159,8 @@
       }
 
       BookmarksPopup.prototype.render = function($target) {
-        var bookmark, bookmarkItem, flowtipOptions, _i, _len, _ref;
+        var bookmark, bookmarkItem, flowtipOptions, _i, _len, _ref,
+          _this = this;
         this.$target = $target;
         this.$el = document.createElement("ul");
         this.$el.className = "bookmarks-list";
@@ -193,7 +204,10 @@
         }, flowtipOptions, this.flowtipOptions));
         this.flowtip.setTooltipContent(this.$el);
         this.flowtip.setTarget(this.$target);
-        return this.flowtip.show();
+        this.flowtip.show();
+        return this.flowtip.content.addEventListener("scroll", function() {
+          return _this.hidePopupIfPresent();
+        }, false);
       };
 
       BookmarksPopup.prototype.hide = function() {
@@ -226,21 +240,57 @@
       };
 
       BookmarksPopup.prototype.BookmarkItemDidMouseOver = function(bookmarkItem) {
+        var _ref;
         if (bookmarkItem.isFolder()) {
           if (this.popup) {
             if (this.popup.folderId !== bookmarkItem.bookmarkId) {
-              return this.hidePopupIfPresent();
+              this.hidePopupIfPresent();
             }
           } else {
-            return this.openFolder(bookmarkItem);
+            this.openFolder(bookmarkItem);
           }
         } else {
-          return this.hidePopupIfPresent();
+          this.hidePopupIfPresent();
+        }
+        return (_ref = this.parentPopup) != null ? typeof _ref.BookmarksPopupDidMouseOverItem === "function" ? _ref.BookmarksPopupDidMouseOverItem(bookmarkItem) : void 0 : void 0;
+      };
+
+      BookmarksPopup.prototype.BookmarkItemDidMouseOut = function(bookmarkItem) {
+        var _this = this;
+        if (bookmarkItem.isFolder()) {
+          if (!this.mouseoutTimeout) {
+            return this.mouseoutTimeout = _.delay(function() {
+              _this.hidePopupIfPresent();
+              return _this.mouseoutTimeout = null;
+            }, 100);
+          }
         }
       };
 
       BookmarksPopup.prototype.BookmarkItemWillClick = function(bookmarkItem) {
-        return this.hidePopupIfPresent();
+        if (this.popup && this.popup.folderId !== bookmarkItem.bookmarkId) {
+          return this.hidePopupIfPresent();
+        }
+      };
+
+      BookmarksPopup.prototype.BookmarkItemDidClick = function(bookmarkItem) {
+        var _ref;
+        return (_ref = this.parentPopup) != null ? typeof _ref.BookmarksPopupDidClickItem === "function" ? _ref.BookmarksPopupDidClickItem(bookmarkItem) : void 0 : void 0;
+      };
+
+      BookmarksPopup.prototype.BookmarksPopupDidMouseOverItem = function(bookmarkItem) {
+        if (this.mouseoutTimeout) {
+          clearTimeout(this.mouseoutTimeout);
+          return this.mouseoutTimeout = null;
+        }
+      };
+
+      BookmarksPopup.prototype.BookmarksPopupDidClickItem = function(bookmarkItem) {
+        if (this.parentPopup) {
+          return this.hidePopupIfPresent();
+        } else {
+          return this.hide();
+        }
       };
 
       return BookmarksPopup;
@@ -270,12 +320,28 @@
           $link.setAttribute("href", this.bookmark.url);
         }
         $link.addEventListener("mouseover", function() {
-          var _ref;
-          return (_ref = _this.delegate) != null ? typeof _ref.BookmarkItemDidMouseOver === "function" ? _ref.BookmarkItemDidMouseOver(_this) : void 0 : void 0;
+          if (_this.mouseoutTimeout) {
+            clearTimeout(_this.mouseoutTimeout);
+            return _this.mouseoutTimeout = null;
+          } else {
+            return _.delay(function() {
+              var _ref;
+              return (_ref = _this.delegate) != null ? typeof _ref.BookmarkItemDidMouseOver === "function" ? _ref.BookmarkItemDidMouseOver(_this) : void 0 : void 0;
+            }, 110);
+          }
         }, false);
         $link.addEventListener("mouseout", function() {
-          var _ref;
-          return (_ref = _this.delegate) != null ? typeof _ref.BookmarkItemDidMouseOut === "function" ? _ref.BookmarkItemDidMouseOut(_this) : void 0 : void 0;
+          if (!_this.mouseoutTimeout) {
+            return _this.mouseoutTimeout = _.delay(function() {
+              var _ref;
+              if ((_ref = _this.delegate) != null) {
+                if (typeof _ref.BookmarkItemDidMouseOut === "function") {
+                  _ref.BookmarkItemDidMouseOut(_this);
+                }
+              }
+              return _this.mouseoutTimeout = null;
+            }, 100);
+          }
         }, false);
         $link.addEventListener("mousedown", function() {
           var _ref;
