@@ -17,6 +17,10 @@ class ChromeClassicNewTab
         @bookmarksBar.hidePopupIfPresent()
     , false
 
+    window.addEventListener "resize", =>
+      @bookmarksBar.hidePopupIfPresent()
+    , false
+
   #
   # Private
   #
@@ -104,6 +108,7 @@ class ChromeClassicNewTab
 
     constructor: (@bookmarks, @options = {}, @flowtipOptions = {}) ->
       @parentPopup = @options.parentPopup
+      @parentRegion = @options.parentRegion
       @folderId = @options.folderId
 
     render: (@$target) ->
@@ -117,7 +122,7 @@ class ChromeClassicNewTab
 
       flowtipOptions = if @parentPopup
         {
-          region: "right"
+          region: @parentRegion || "right"
           topDisabled: true
           leftDisabled: false
           rightDisabled: false
@@ -174,6 +179,8 @@ class ChromeClassicNewTab
         @hidePopupIfPresent()
         @popup = new BookmarksPopup(bookmarks, {
           parentPopup: this
+          parentRegion: if @parentPopup
+            @flowtip._region
           folderId: bookmarkItem.bookmarkId
         })
         @popup.render(bookmarkItem.$link)
@@ -291,15 +298,21 @@ class ChromeClassicNewTab
 
   class AppsList
 
+    @BUILD_IN_APPS = [
+      "blpcfgokakmgnkcojhhkbfbldkacnbeo" # YouTube
+      "coobgpohoikkiipiblmjeljniedjpjpf" # Google Search
+      "pjkljhegncpnkpknbcohdijeoejaedia" # Gmail
+    ]
+
     constructor: ->
       @appsLoaded = new RSVP.Promise (resolve, reject) =>
         chrome.management.getAll (extensions) =>
-          @apps = for extension in extensions when extension.enabled && extension.isApp
+          @apps = for extension in extensions when extension.isApp && (extension.enabled || (extension.id in AppsList.BUILD_IN_APPS))
             extension
           resolve(@apps)
 
       window.addEventListener "resize", =>
-        @repositionList()
+        @onWindowResized()
 
     render: (@viewport) ->
       @el = document.createElement("div")
@@ -314,7 +327,7 @@ class ChromeClassicNewTab
 
       @appsLoaded.then =>
         @renderApps()
-        @repositionList()
+        @onWindowResized()
 
     renderApps: ->
       @apps.unshift({
@@ -329,7 +342,29 @@ class ChromeClassicNewTab
         appItem = new AppItem(app)
         appItem.render(@list)
 
-    repositionList: ->
+    onWindowResized: ->
+      effectiveWidth = if document.width < 600
+        640
+      else
+        document.width
+
+      if effectiveWidth < 1280
+        listPadding = 175 * (document.width / 1280)
+        imageWidth = Math.round(effectiveWidth / 10)
+        itemMargins = [Math.round(effectiveWidth / 128), Math.round(effectiveWidth / 51.2)]
+        fontSize = 16 * (effectiveWidth / 1280)
+        fontSize = 11 if fontSize < 11
+      else
+        listPadding = 175
+        imageWidth = 128
+        itemMargins = [10, 25]
+        fontSize = 16
+
+      $("#apps").css({ paddingLeft: "#{listPadding}px" })
+      $(@list).find(".app-link").css({ width: imageWidth, paddingTop: "#{imageWidth}px" })
+      $(@list).find(".app-item").css({ margin: "#{itemMargins[0]}px #{itemMargins[1]}px" })
+      $(@list).find(".app-link span").css({ fontSize: "#{fontSize}px" })
+
       @list.style.marginTop = ((@el.clientHeight - @list.clientHeight) / 3) + "px"
 
   class AppItem
@@ -344,7 +379,7 @@ class ChromeClassicNewTab
       icon = document.createElement("img")
       label = document.createElement("span")
 
-      link.className = "clearfix"
+      link.className = "clearfix app-link"
 
       if @app.id
         link.addEventListener "click", =>
