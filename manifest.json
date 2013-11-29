@@ -5,9 +5,9 @@
   "version": "1.0",
   "homepage_url": "https://github.com/qiushihe/chrome-classic-newtab",
   "icons": {
-    "128": "icon_128.png",
-    "48": "icon_48.png",
-    "16": "icon_16.png"
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "incognito": "split",
   "chrome_url_overrides": {
